@@ -1,7 +1,9 @@
-from keras import applications as ka, layers as kl, models as km
-from keras.preprocessing.image import ImageDataGenerator
+from keras import applications as ka, layers as kl, models as km, optimizers as ko, callbacks as kc
 import tensorflowjs as tfjs
+from keras.preprocessing.image import ImageDataGenerator
 import matplotlib.pyplot as plt
+
+
 def getmodel(cls=2):
     base_model = ka.nasnet.NASNetMobile(weights='imagenet', pooling='avg')
     # inceptionresnetv2, mobilenets, nasnet , imagenet
@@ -10,24 +12,35 @@ def getmodel(cls=2):
     model = km.Model(base_model.input, x)
     return model
 
+
+def lr_schedule(epoch):
+    if epoch < 30:
+        return 0.1
+    elif 30 < epoch < 60:
+        return 0.01
+    else:
+        return 0.001
+
+
 if __name__ == '__main__':
     model = getmodel()
-    model.compile(optimizer='sgd',
+    model.compile(optimizer=ko.SGD(lr=0.1, momentum=0.9),
                   loss='categorical_crossentropy',
                   metrics=['acc'],
                   )
+    schedule = kc.LearningRateScheduler(lr_schedule)
     # model.load_weights('path.h5')
 
     datagen = ImageDataGenerator(preprocessing_function=ka.resnet50.preprocess_input,
-                                                 rotation_range=0.2,
-                 width_shift_range=0.1,
-                 height_shift_range=0.1,
-                 horizontal_flip=True,
-                 vertical_flip=False,
-)
+                                 rotation_range=0.2,
+                                 width_shift_range=0.1,
+                                 height_shift_range=0.1,
+                                 horizontal_flip=True,
+                                 vertical_flip=False,
+                                 )
     train_data = datagen.flow_from_directory('train', target_size=(224, 224), batch_size=32)
     test_data = datagen.flow_from_directory('validation', target_size=(224, 224), batch_size=32)
-    history = model.fit_generator(train_data, epochs=10000, validation_data=test_data)
+    history = model.fit_generator(train_data, epochs=10000, validation_data=test_data, callbacks=[schedule])
     model.save_weights('fish.h5')
     tfjs.converters.save_keras_model(model, 'here')
     plt.plot(history.history['loss'])
